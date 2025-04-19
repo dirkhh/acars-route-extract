@@ -11,25 +11,28 @@
 
 import ahocorasick
 import json
-import re
 import socket
 import sys
 import time
+from callsign import Callsigns
+from checkroute import Routes
 
 
 # a simple Aho-Corasick search class
 class Parser:
-    def __init__(self):
+    def __init__(self, showtime=False):
         # import the airport list (extracted from VRS standing data) and initialize
         # the Aho-Corasick automaton
-        now = time.time()
-        self.showtime = False  # yes, this is ironic - we always show the prep time...
+        self.showtime = showtime
+        if self.showtime:
+            now = time.time()
         self.automaton = automaton = ahocorasick.Automaton()
         with open("./route-airports.txt", "r") as f:
             for line in f:
                 self.automaton.add_word(line.strip(), line.strip())
         self.automaton.make_automaton()
-        print(f"prepared in {time.time() - now}")
+        if self.showtime:
+            print(f"prepared in {time.time() - now}")
 
     def check_for_route(self, s):
         if self.showtime:
@@ -93,10 +96,12 @@ class Parser:
 
 
 class ACARS:
-    def __init__(self):
+    def __init__(self, verbose=False, showtime=False):
         self.gbuf = ""
-        self.parser = Parser()
-        self.verbose = False
+        self.parser = Parser(showtime)
+        self.c = Callsigns()
+        self.r = Routes()
+        self.verbose = verbose
         # open the file route-pairs.txt and read the pairs
         # that are comma separated in the file into an array of pairs
         with open("route-pairs.txt", "r") as f:
@@ -106,7 +111,8 @@ class ACARS:
         try:
             jo = json.loads(js)
         except Exception as e:
-            print(f"json.loads failed: {e}\n\n\n")
+            if self.verbose:
+                print(f"json.loads failed: {e} -- {js}")
             return
         route_array = []
         # print(f"json.loads gets us {jo}")
@@ -126,6 +132,9 @@ class ACARS:
                     a = jo.get("vdl2").get("avlc").get("acars")
                     if "flight" in a:
                         flight = a.get("flight")
+                        callsign = self.c.validate_callsign(flight)
+                        if callsign:
+                            flight = callsign
                     if "xid" in a:
                         vp = a.get("xid").get("vdl_params")
                         if vp:
@@ -136,7 +145,10 @@ class ACARS:
         known_routes = route_set.intersection(self.routepairs)
         if len(known_routes) > 0:
             route_array = [r for r in route_array if f"{r[0]},{r[1]}" in known_routes]
-            print(f"{flight}: route {route_array} {dst_airport} from label {a.get('label')}")
+            if self.verbose or len(route_array) > 1:
+                print(f"{flight}: route {route_array} {dst_airport} from label {a.get('label')}")
+            if len(route_array) == 1:
+                self.r.check_route(flight, route_array, self.verbose)
         elif self.verbose and len(route_array) > 0:
             print(f"{flight}: unlikely route {route_array} {dst_airport} from label {a.get('label')}")
 
@@ -173,22 +185,23 @@ class ACARS:
 
 
 if __name__ == "__main__":
-    a = ACARS()
     acarshost = ""
     acarsport = 15555
+    verbose = False
+    showtime = False
     for arg in sys.argv:
         if arg.startswith("--host="):
             acarshost = arg.split("=")[1]
         if arg.startswith("--port="):
             acarsport = arg.split("=")[1]
         if arg == "-v":
-            a.verbose = True
+            verbose = True
         if arg == "--showtime":
-            a.parser.showtime = True
+            showtime = True
         if arg == "--help":
             print(f"Usage: {sys.argv[0]} [--host=acars_host] [--port=acars_port] [-v] [--showtime] [--help]")
             exit(0)
-
+    a = ACARS(verbose, showtime)
     if acarshost != "":
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ip = socket.gethostbyname(acarshost)
