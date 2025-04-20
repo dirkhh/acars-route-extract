@@ -56,7 +56,12 @@ class Parser:
         while len(fours) > 1:
             f0 = fours[0]
             for f in fours[1:]:
+                # no flights just back to where you came from
                 if f[1] == f0[1]:
+                    continue
+                # if the first airport is prefixed with /WR this appears to be some warning about
+                # the continuing legs after the current flight (seen this on several AAL flights)
+                if f0[0] > 7 and s[f0[0] - 6 : f0[0] - 3] == "/WR":
                     continue
                 d = abs(f[0] - f0[0])
                 if d == 4 or d == 5:
