@@ -214,6 +214,8 @@ if __name__ == "__main__":
         # loop over the data from the JSON socket
         while True:
             data = client.recv(1024)
+            if verbose:
+                print(f"received {len(data)} bytes")
             a.add_data(data.decode())
     else:
         # loop over the data from stdin
