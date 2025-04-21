@@ -192,20 +192,27 @@ class ACARS:
 if __name__ == "__main__":
     acarshost = ""
     acarsport = 15555
-    verbose = False
+    verbose = 0
     showtime = False
-    for arg in sys.argv:
+    nats = False
+    for arg in sys.argv[1:]:
         if arg.startswith("--host="):
             acarshost = arg.split("=")[1]
-        if arg.startswith("--port="):
+        elif arg.startswith("--port="):
             acarsport = arg.split("=")[1]
-        if arg == "-v":
-            verbose = True
-        if arg == "--showtime":
+        elif arg == "--nats":
+            nats = True
+        elif arg == "-v":
+            verbose += 1
+        elif arg == "--showtime":
             showtime = True
-        if arg == "--help":
+        elif arg == "--help":
             print(f"Usage: {sys.argv[0]} [--host=acars_host] [--port=acars_port] [-v] [--showtime] [--help]")
             exit(0)
+        else:
+            print(f"unknown argument {arg}")
+            print(f"Usage: {sys.argv[0]} [--host=acars_host] [--port=acars_port] [-v] [--showtime] [--help]")
+            exit(1)
     a = ACARS(verbose, showtime)
     if acarshost != "":
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
