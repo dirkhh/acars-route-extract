@@ -5,6 +5,11 @@ But no, this really is just a brute force algorithm to guess route data from ACA
 
 ## Documentation
 
+*WIP*
+Install the necessary python modules
+orjson
+pyahocorasick
+
 Clone the VTR standing data: `git clone https://github.com/vradarserver/standing-data`
 Run prepare the input files: `python3 prep-data.py
 
