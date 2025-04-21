@@ -10,7 +10,7 @@
 # Copyright 2025 Dirk Hohndel
 
 import ahocorasick
-import json
+import orjson as json
 import socket
 import sys
 import time
