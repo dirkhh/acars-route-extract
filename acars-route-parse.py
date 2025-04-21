@@ -112,81 +112,84 @@ class ACARS:
         with open("route-pairs.txt", "r") as f:
             self.routepairs = set(r.strip() for r in f)
 
-    def handle_json(self, js):
+    def handle_json(self, js, nats):
         try:
             jo = json.loads(js)
         except Exception as e:
             if self.verbose:
                 print(f"json.loads failed: {e} -- {js}")
             return
+        if verbose > 2:
+            print(jo)
         route_array = []
-        # print(f"json.loads gets us {jo}")
+        search_string = ""
+        if nats and "payload" in jo:
+            search_string = jo.get("payload")
+            if not search_string.startswith("{"):
+                # some plain text message -- ignore for now
+                return
+            try:
+                jo = json.loads(search_string)
+            except:
+                if self.verbose:
+                    print(f"can't parse {jo}")
+                return
         if "vdl2" in jo:
-            search_string = json.dumps(jo.get("vdl2").get("avlc"))
+            avlc = jo.get("vdl2").get("avlc")
+            if not search_string:
+                search_string = json.dumps(avlc)
             if self.verbose:
                 print(f"--> {search_string}")
             route_array = self.parser.check_for_route(search_string)
             a = {}
             flight = "no callsign / hex"
             dst_airport = ""
-            if "avlc" in jo.get("vdl2"):
-                avlc = jo.get("vdl2").get("avlc")
-                src = avlc.get("src")
-                flight = f"hex:{src.get('addr')}"
-                if "acars" in avlc:
-                    a = jo.get("vdl2").get("avlc").get("acars")
-                    if "flight" in a:
-                        flight = a.get("flight")
-                        callsign = self.c.validate_callsign(flight)
-                        if callsign:
-                            flight = callsign
-                    if "xid" in a:
-                        vp = a.get("xid").get("vdl_params")
-                        if vp:
-                            for [k, v] in vp.items():
-                                if k == "dst_airport":
-                                    dst_airport = f"declared destination: {v}"
+            src = avlc.get("src")
+            flight = f"hex:{src.get('addr')}"
+            if "acars" in avlc:
+                a = jo.get("vdl2").get("avlc").get("acars")
+                if "flight" in a:
+                    flight = a.get("flight")
+                    callsign = self.c.validate_callsign(flight)
+                    if callsign:
+                        flight = callsign
+                    else:
+                        # no point if we don't have a valid callsign
+                        return
+                else:
+                    return
         route_set = set(f"{r[0]},{r[1]}" for r in route_array)
         known_routes = route_set.intersection(self.routepairs)
         if len(known_routes) > 0:
             route_array = [r for r in route_array if f"{r[0]},{r[1]}" in known_routes]
-            if self.verbose or len(route_array) > 1:
+            if self.verbose and len(route_array) > 1:
                 print(f"{flight}: route {route_array} {dst_airport} from label {a.get('label')}")
             if len(route_array) == 1:
                 self.r.check_route(flight, route_array, self.verbose)
         elif self.verbose and len(route_array) > 0:
             print(f"{flight}: unlikely route {route_array} {dst_airport} from label {a.get('label')}")
 
-    def add_data(self, d):
+    def add_data(self, d, nats):
         self.gbuf += d
         # this assumes well formed json
         i = self.gbuf.find("{")
         if i == -1:
-            print("no opening { -- that's weird")
+            print(f"no opening {{ -- that's weird -- {self.gbuf}")
             return
         elif i > 0:
             self.gbuf = self.gbuf[i:]
-        # find the matching closing '}' in order to hand of one json object
-        open = 1
-        i = 0
-        while open > 0:
-            oi = self.gbuf.find("{", i + 1)
-            ci = self.gbuf.find("}", i + 1)
-            if oi == -1 and ci == -1:
-                # print("partial json, keep waiting")
-                return
-            if -1 < oi and oi < ci:
-                open += 1
-                i = oi
-                continue
-            if -1 < ci:
-                open -= 1
-                i = ci
-                continue
+        # objects should be coming in one json object per line
+        try:
+            jo = json.loads(self.gbuf)
+        except:
+            if self.verbose:
+                print(f"can't parse {self.gbuf} -- trying to recover")
+            self.gbuf = ""
+            return
 
         # print(f"this should be a valid json expression {self.gbuf[0:i+1]}")
-        self.handle_json(self.gbuf[0 : i + 1])
-        self.gbuf = self.gbuf[i + 1 :] if len(self.gbuf) > i + 1 else ""
+        self.handle_json(self.gbuf, nats)
+        self.gbuf = ""
 
 
 if __name__ == "__main__":

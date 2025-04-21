@@ -31,14 +31,22 @@ class Callsigns:
         code = match.group("code")
         number = match.group("number")
         if code not in self.airline_data:
-            # maybe this is a IATA code?
-            for airline in self.airline_data.keys():
-                if self.airline_data[airline][3] == code:
-                    code = self.airline_data[airline][2]
-                    break
             # maybe it's a silly Delta pilot still thinking they work for Northwest?
             if code == "NW":
                 code = "DAL"
+            # or UPS insisting that their code is UP (which is actually Bahamas Air)
+            # but dang... what about actual Bahamas Air flights??
+            elif code == "UP":
+                code = "UPS"
+            # or multiple (outdated) 3 letter codes matching to one 2 letter code
+            elif code == "QF":
+                code = "QFA"
+            else:
+                # maybe this is a IATA code?
+                for airline in self.airline_data.keys():
+                    if self.airline_data[airline][3] == code:
+                        code = self.airline_data[airline][2]
+                        break
         match = re.search("^0+([0-9].*)", number)
         if match:
             number = match.group(1)
@@ -61,10 +69,10 @@ class Callsigns:
         if code in self.airline_data:
             airline_entry = self.airline_data.get(code)
             if airline_entry[5] != "" and re.search(airline_entry[5], number, re.IGNORECASE):
-                print(f"{_callsign} matched charter pattern {airline_entry[0]}:{airline_entry[5]}")
+                # print(f"{_callsign} matched charter pattern {airline_entry[0]}:{airline_entry[5]}")
                 return ""
             if airline_entry[4] != "" and re.search(airline_entry[4], number, re.IGNORECASE):
-                print(f"{_callsign} matched position flight pattern {airline_entry[0]}:{airline_entry[4]}")
+                # print(f"{_callsign} matched position flight pattern {airline_entry[0]}:{airline_entry[4]}")
                 return ""
 
         return code + number
