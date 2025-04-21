@@ -96,7 +96,7 @@ class Parser:
             route = [[r[0], r[1]] for r in route if r[2] == closest_pair[2]]
 
         if self.showtime:
-            print(f"checked in {time.time() - now}")
+            print(f"checked in {(time.time() - now):.6f}")
         return route
 
 
