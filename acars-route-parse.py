@@ -220,4 +220,6 @@ if __name__ == "__main__":
     else:
         # loop over the data from stdin
         for line in sys.stdin:
-            a.add_data(line)
+            if line.strip() == "":
+                continue
+            a.add_data(line, nats)
