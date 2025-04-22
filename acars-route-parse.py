@@ -11,11 +11,15 @@
 
 import ahocorasick
 import orjson as json
+import os
+import redis
 import socket
 import sys
+import threading
 import time
 from callsign import Callsigns
 from checkroute import Routes
+from dotenv import load_dotenv
 
 
 # a simple Aho-Corasick search class
@@ -101,12 +105,13 @@ class Parser:
 
 
 class ACARS:
-    def __init__(self, verbose=False, showtime=False):
+    def __init__(self, verbose, showtime, valkey):
         self.gbuf = ""
         self.parser = Parser(showtime)
         self.c = Callsigns()
-        self.r = Routes()
+        self.r = Routes(valkey, verbose)
         self.verbose = verbose
+        self.valkey = valkey
         # open the file route-pairs.txt and read the pairs
         # that are comma separated in the file into an array of pairs
         with open("route-pairs.txt", "r") as f:
@@ -119,7 +124,7 @@ class ACARS:
             if self.verbose:
                 print(f"json.loads failed: {e} -- {js}")
             return
-        if verbose > 2:
+        if self.verbose > 2:
             print(jo)
         route_array = []
         search_string = ""
@@ -145,7 +150,12 @@ class ACARS:
             flight = "no callsign / hex"
             dst_airport = ""
             src = avlc.get("src")
-            flight = f"hex:{src.get('addr')}"
+            if not src:
+                return
+            hex = src.get("addr")
+            if not hex:
+                return
+            flight = f"hex:{hex}"
             if "acars" in avlc:
                 a = jo.get("vdl2").get("avlc").get("acars")
                 if "flight" in a:
@@ -165,7 +175,7 @@ class ACARS:
             if self.verbose and len(route_array) > 1:
                 print(f"{flight}: route {route_array} {dst_airport} from label {a.get('label')}")
             if len(route_array) == 1:
-                self.r.check_route(flight, route_array, self.verbose)
+                self.r.check_route(flight, hex, route_array)
         elif self.verbose and len(route_array) > 0:
             print(f"{flight}: unlikely route {route_array} {dst_airport} from label {a.get('label')}")
 
@@ -216,14 +226,19 @@ if __name__ == "__main__":
             print(f"unknown argument {arg}")
             print(f"Usage: {sys.argv[0]} [--host=acars_host] [--port=acars_port] [-v] [--showtime] [--help]")
             exit(1)
-    a = ACARS(verbose, showtime)
+
+    load_dotenv()
+    valkey_url = os.getenv("VALKEY", "redis://localhost:6379")
+    valkey = redis.Redis.from_url(valkey_url)
+
+    a = ACARS(verbose, showtime, valkey)
     if acarshost != "":
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ip = socket.gethostbyname(acarshost)
         client.connect((ip, acarsport))
         # loop over the data from the JSON socket
         while True:
-            data = client.recv(1024)
+            data = client.recv(4096)
             if verbose:
                 print(f"received {len(data)} bytes")
             a.add_data(data.decode())
