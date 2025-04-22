@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 from dotenv import load_dotenv
+from callsign import Callsigns
 
 
 def print_err(*args, **kwargs):
@@ -27,19 +28,36 @@ class Routes:
             print_err("setting up Routes class")
         self.valkey = valkey
         self.verbose = verbose
+        self.callsigns = Callsigns()
         self.routes = {}
         self.airports = Airports()
-        self.route_path = "./standing-data/routes/schema-01"
-        self.route_files = glob.glob(self.route_path + "/**/*.csv", recursive=True)
+        if self.valkey.get("adsbim_valkey") != b"1":
+            # this isn't a shared Valkey instance with the adsbim API server,
+            # so load route data from the VRS standing data
+            print_err("loading routes from VRS standing data")
+            self.route_path = "./standing-data/routes/schema-01"
+            self.route_files = glob.glob(self.route_path + "/**/*.csv", recursive=True)
+            # open and read each csv file
+            for file in self.route_files:
+                with open(file, "r", newline="") as csvfile:
+                    reader = csv.reader(csvfile, delimiter=",", quotechar='"')
+                    for row in reader:
+                        self.routes[row[0]] = row[4]
+            print_err(f"loaded {len(self.routes)} routes")
+        else:
+            # populate from Valkey
+            print_err("loading routes from Valkey")
+            keys = self.valkey.keys("vrs:route:*")
+            print_err(f"got {len(keys)} keys")
+            values = self.valkey.mget(keys)
+            for routeline in values:
+                row = routeline.decode().split(",")
+                self.routes[row[0]] = row[4]
+            print_err(f"loaded {len(self.routes)} routes")
+
         self.callsignCache = {}
         self.lock = threading.Lock()
         self.last_api_call = 0
-        # open and read each csv file
-        for file in self.route_files:
-            with open(file, "r", newline="") as csvfile:
-                reader = csv.reader(csvfile, delimiter=",", quotechar='"')
-                for row in reader:
-                    self.routes[row[0]] = row[4]
         worker = threading.Thread(target=self.run)
         worker.start()
 
@@ -109,7 +127,7 @@ class Routes:
                         print_err(f"no callsign for {hex}")
                         continue
                     route = route_object["route"]
-                    known = self.routes.get(callsign)
+                    known = self.routes.get(callsign, "").strip()
                     if not known:
                         print_err(f"{callsign} -> {route} : was unknown")
                     elif route not in known:
@@ -121,6 +139,9 @@ class Routes:
                     if self.verbose > 1:
                         print_err(f"remember {route_object.get('found_callsign')}-{hex} == {route} for 15 minutes")
                     self.valkey.set(f"{route_object.get('found_callsign')}-{hex}", route, ex=60 * 15)
+                    # also update the vrs:route for this flight, using the correct normalized callsign
+                    code, number = self.callsigns.normalize_callsign(callsign)
+                    self.valkey.set(f"vrs:route:{callsign}", f"{callsign},{code},{number},{code},{route}")
             else:
                 if self.verbose > 1:
                     print_err("no routes to check")
