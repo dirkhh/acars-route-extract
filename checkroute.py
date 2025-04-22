@@ -48,7 +48,7 @@ class Routes:
             print_err("starting checkroute worker")
         while True:
             hexset = set()
-            num_routes = self.valkey.llen("checkroute")
+            num_routes = min(20, self.valkey.llen("checkroute"))
             if num_routes > 0:
                 now = time.time()
                 routes = []
