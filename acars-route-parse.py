@@ -89,6 +89,11 @@ class Parser:
                 for t in threes[1:]:
                     if t[1] == t0[1]:
                         continue
+                    # same removal of /WR prefixed readings. They appear to usually be in ICAO
+                    # notation, but stupidly /WRKSFO,KOAK can be read as SFO,KOA (so interpreted as
+                    # three letter airport codes which gets you to Kona, instead of Oakland)
+                    if t0[0] > 7 and s[t0[0] - 6 : t0[0] - 3] == "/WR":
+                        continue
                     d = abs(t[0] - t0[0])
                     if d == 3 or d == 4:
                         route.append([t0[1], t[1], d])
