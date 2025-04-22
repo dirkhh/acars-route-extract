@@ -88,7 +88,11 @@ class Routes:
                         ac = self.get_callsign_for_hex_list(",".join(hexset))
                         self.last_api_call = time.time()
                     for aircraft in ac:
-                        callsign = aircraft.get("flight").strip().upper()
+                        callsign = aircraft.get("flight")
+                        if callsign:
+                            callsign = callsign.strip().upper()
+                        else:
+                            continue
                         hex = aircraft.get("hex").strip().upper()
                         if self.verbose > 1:
                             print_err(f"got {aircraft} with callsign {callsign} for {hex}")
