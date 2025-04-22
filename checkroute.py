@@ -141,11 +141,11 @@ class Routes:
         try:
             jo = response.json()
         except:
-            print_err(f"calling adsb.fi on {hex} : json error")
+            print_err(f"calling adsb.fi on {hexlist} : json error")
             return []
         ac = jo.get("ac")
         if not ac:
-            print_err(f"calling adsb.fi on {hex} : no ac")
+            print_err(f"calling adsb.fi on {hexlist} : no ac")
             return []
         return ac
 
